@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPPBLOCK - Recarga de Créditos</title>
+    <!-- Script oficial de PayPal (Reemplaza SB_CLIENT_ID con tu ID real en producción) -->
+    <script src="https://www.paypal.com/sdk/js?client-id=SB_CLIENT_ID&currency=USD"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-red: #D32F2F;
+            --primary-hover: #b71c1c;
+            --text-grey: #757575;
+            --border-color: #ddd;
+            --bg-color: #f0f2f5;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .payment-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+        .logo-placeholder { width: 180px; height: auto; margin-bottom: 25px; }
+        h2 { color: var(--text-grey); font-weight: 600; margin-bottom: 30px; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; color: #444; font-weight: 600; font-size: 0.9rem; }
+        input {
+            width: 100%; padding: 12px 15px; border: 2px solid var(--border-color);
+            border-radius: 8px; font-size: 1rem; box-sizing: border-box; outline: none;
+            transition: border-color 0.3s;
+        }
+        input:focus { border-color: var(--primary-red); }
+        .verify-btn {
+            background-color: var(--primary-red); color: white; border: none; padding: 14px;
+            border-radius: 8px; cursor: pointer; width: 100%; font-size: 16px; font-weight: 600;
+            transition: background 0.3s;
+        }
+        .verify-btn:hover { background-color: var(--primary-hover); }
+        .error-msg { color: #d32f2f; margin-top: 15px; display: none; font-size: 0.9rem; }
+        #paypal-button-container { display: none; margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="payment-card">
+    <svg class="logo-placeholder" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M40 70C40 70 10 60 10 35V15L40 5L70 15V35C70 60 40 70 40 70Z" fill="#D32F2F"/>
+        <path d="M40 25V45" stroke="white" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="50" r="3" fill="white"/>
+        <text x="85" y="50" fill="#757575" font-family="Segoe UI, sans-serif" font-weight="bold" font-size="40">IPPBLOCK</text>
+    </svg>
+    
+    <h2>Recarga de Créditos</h2>
+    
+    <div class="input-group">
+        <label for="email">Correo de Usuario</label>
+        <input type="email" id="email" placeholder="cliente@email.com">
+    </div>
+
+    <div class="input-group">
+        <label for="amount">Monto a Recargar (USD)</label>
+        <input type="number" id="amount" placeholder="0.00" min="10">
+    </div>
+
+    <button class="verify-btn" id="btn-verify" onclick="verificarUsuario()">Verificar Cuenta</button>
+    <p id="error-message" class="error-msg"></p>
+
+    <div id="paypal-button-container"></div>
+</div>
+
+<script>
+    let correoValidado = "";
+    let montoValidado = 0;
+
+    async function verificarUsuario() {
+        const email = document.getElementById('email').value;
+        const amount = document.getElementById('amount').value;
+        const errorMsg = document.getElementById('error-message');
+        const btnVerify = document.getElementById('btn-verify');
+
+        if(!email || !amount) {
+            mostrarError("Por favor completa todos los campos.");
+            return;
+        }
+
+        btnVerify.innerText = "Verificando...";
+        btnVerify.disabled = true;
+        errorMsg.style.display = "none";
+
+        try {
+            // Llamada al Backend Real
+            const response = await fetch('/api/check-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email })
+            });
+            
+            const data = await response.json();
+
+            if (data.existe) {
+                // Éxito: El usuario existe en la DB
+                correoValidado = email;
+                montoValidado = amount;
+                
+                btnVerify.style.display = 'none'; // Ocultar botón verificar
+                document.getElementById('email').disabled = true;
+                document.getElementById('amount').disabled = true;
+                
+                document.getElementById('paypal-button-container').style.display = "block";
+                renderizarPayPal();
+            } else {
+                mostrarError("Este correo no está registrado en nuestra base de datos.");
+                resetBtn();
+            }
+        } catch (error) {
+            console.error(error);
+            mostrarError("Error de conexión con el servidor.");
+            resetBtn();
+        }
+    }
+
+    function mostrarError(texto) {
+        const el = document.getElementById('error-message');
+        el.innerText = texto;
+        el.style.display = "block";
+    }
+
+    function resetBtn() {
+        const btn = document.getElementById('btn-verify');
+        btn.innerText = "Verificar Cuenta";
+        btn.disabled = false;
+    }
+
+    function renderizarPayPal() {
+        paypal.Buttons({
+            createOrder: function(data, actions) {
+                return actions.order.create({
+                    purchase_units: [{
+                        amount: { value: montoValidado },
+                        description: `Créditos IPPBLOCK para: ${correoValidado}`
+                    }]
+                });
+            },
+            onApprove: function(data, actions) {
+                return actions.order.capture().then(function(details) {
+                    alert('Pago realizado con éxito por ' + details.payer.name.given_name);
+                    
+                    // Notificar al servidor para enviar correos
+                    fetch('/api/payment-success', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: correoValidado,
+                            amount: montoValidado,
+                            orderID: data.orderID,
+                            payerName: details.payer.name.given_name
+                        })
+                    });
+                });
+            }
+        }).render('#paypal-button-container');
+    }
+</script>
+</body>
+</html>
